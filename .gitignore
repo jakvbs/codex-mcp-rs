@@ -1,0 +1,28 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NPM
+npm/node_modules/
+npm/*.tgz
+npm/codex-mcp-rs
+npm/codex-mcp-rs.exe
+npm/*.tar.gz
+npm/*.zip
+
+# Build artifacts
+*.tar.gz
+*.zip
