@@ -82,7 +82,7 @@ pub struct CodexArgs {
     #[serde(rename = "SESSION_ID", default)]
     pub session_id: Option<String>,
     /// Allow codex running outside a Git repository (useful for one-off directories)
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub skip_git_repo_check: bool,
     /// Return all messages (e.g. reasoning, tool calls, etc.) from the codex session
     #[serde(default)]
@@ -113,6 +113,9 @@ pub struct CodexArgs {
 fn default_timeout() -> Option<u64> {
     Some(600) // 10 minutes default
 }
+
+/// Maximum allowed timeout in seconds (1 hour)
+const MAX_TIMEOUT_SECS: u64 = 3600;
 
 /// Security configuration for server-side restrictions
 pub struct SecurityConfig {
@@ -151,10 +154,6 @@ fn get_security_config(warnings: &mut Vec<String>) -> SecurityConfig {
         allow_skip_git_check: parse_env_bool("CODEX_ALLOW_SKIP_GIT_CHECK", warnings)
             .unwrap_or(false),
     }
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn merge_warnings(
@@ -285,8 +284,33 @@ impl CodexServer {
         }
 
         // Apply security restrictions
-        let (args, restriction_warnings) = self.apply_security_restrictions(args, &security);
+        let (mut args, restriction_warnings) = self.apply_security_restrictions(args, &security);
         security_warnings.extend(restriction_warnings);
+
+        // Enforce timeout requirements: always set and within limits
+        match args.timeout_secs {
+            None => {
+                // Always require a timeout to prevent unbounded execution
+                args.timeout_secs = Some(600); // Use default 10 minutes
+            }
+            Some(0) => {
+                // Zero timeout is invalid, use default
+                security_warnings.push(
+                    "Timeout of 0 seconds is invalid; using default of 600 seconds".to_string(),
+                );
+                args.timeout_secs = Some(600);
+            }
+            Some(timeout) if timeout > MAX_TIMEOUT_SECS => {
+                security_warnings.push(format!(
+                    "Timeout of {} seconds exceeds maximum of {} seconds; capping to maximum",
+                    timeout, MAX_TIMEOUT_SECS
+                ));
+                args.timeout_secs = Some(MAX_TIMEOUT_SECS);
+            }
+            Some(_) => {
+                // Valid timeout within range
+            }
+        }
 
         // Validate working directory exists and is a directory
         let working_dir = &args.cd;
@@ -314,11 +338,19 @@ impl CodexServer {
         // Validate image files exist and are files
         let mut canonical_image_paths = Vec::new();
         for img_path in &args.image {
-            let canonical = img_path.canonicalize().map_err(|e| {
+            // Resolve image path relative to working directory first, then canonicalize
+            let resolved_path = if img_path.is_absolute() {
+                img_path.clone()
+            } else {
+                // For relative paths, resolve against the working directory
+                canonical_working_dir.join(img_path)
+            };
+
+            let canonical = resolved_path.canonicalize().map_err(|e| {
                 McpError::invalid_params(
                     format!(
                         "image file does not exist or is not accessible: {} ({})",
-                        img_path.display(),
+                        resolved_path.display(),
                         e
                     ),
                     None,
@@ -327,7 +359,7 @@ impl CodexServer {
 
             if !canonical.is_file() {
                 return Err(McpError::invalid_params(
-                    format!("image path is not a file: {}", img_path.display()),
+                    format!("image path is not a file: {}", resolved_path.display()),
                     None,
                 ));
             }
@@ -396,9 +428,38 @@ impl CodexServer {
 
             Ok(CallToolResult::success(vec![Content::text(json_output)]))
         } else {
-            let error_msg = result.error.unwrap_or_else(|| "Unknown error".to_string());
-            let error_msg = attach_warnings(error_msg, combined_warnings);
-            Err(McpError::internal_error(error_msg, None))
+            // On failure, return structured error with warnings separated
+            let output = CodexOutput {
+                success: false,
+                session_id: result.session_id,
+                agent_messages: result.agent_messages.clone(),
+                agent_messages_truncated: if result.agent_messages_truncated {
+                    Some(true)
+                } else {
+                    None
+                },
+                all_messages: if args.return_all_messages {
+                    Some(result.all_messages)
+                } else {
+                    None
+                },
+                all_messages_truncated: if args.return_all_messages && result.all_messages_truncated
+                {
+                    Some(true)
+                } else {
+                    None
+                },
+                error: result.error.clone(),
+                warnings: combined_warnings.clone(),
+            };
+
+            let json_output = serde_json::to_string(&output).map_err(|e| {
+                McpError::internal_error(format!("Failed to serialize output: {}", e), None)
+            })?;
+
+            // Return the structured error as content instead of throwing an error
+            // This allows clients to access both error and warnings fields
+            Ok(CallToolResult::success(vec![Content::text(json_output)]))
         }
     }
 }

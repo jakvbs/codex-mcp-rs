@@ -44,7 +44,8 @@ pub struct Options {
     pub model: Option<String>,
     pub yolo: bool,
     pub profile: Option<String>,
-    /// Timeout in seconds for the codex execution. None means no timeout.
+    /// Timeout in seconds for the codex execution. If None, defaults to 600 seconds (10 minutes).
+    /// Set to a specific value to override. The library enforces a timeout to prevent unbounded execution.
     pub timeout_secs: Option<u64>,
 }
 
@@ -60,14 +61,105 @@ pub struct CodexResult {
     pub warnings: Option<String>,
 }
 
+/// Result of reading a line with length limit
+#[derive(Debug)]
+struct ReadLineResult {
+    bytes_read: usize,
+    truncated: bool,
+}
+
+/// Validation mode for enforce_required_fields
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ValidationMode {
+    /// Perform full validation (check session_id and agent_messages)
+    Full,
+    /// Skip validation (for cases with well-defined errors like timeout or truncation)
+    Skip,
+}
+
+/// Read a line from an async buffered reader with a maximum length limit to prevent memory spikes
+/// Returns the number of bytes read (0 on EOF) and whether the line was truncated
+/// Reads in chunks and enforces max_len during reading to prevent OOM from extremely long lines
+///
+/// After hitting max_len, continues reading until newline to properly consume the full line.
+/// This ensures the next read starts at the correct position. For subprocess stdout (our use case),
+/// this is appropriate because:
+/// 1. The Codex CLI always outputs newline-terminated JSON
+/// 2. Process-level timeout prevents indefinite blocking
+/// 3. We stop allocating memory once max_len is hit, preventing OOM
+async fn read_line_with_limit<R: AsyncBufReadExt + Unpin>(
+    reader: &mut R,
+    buf: &mut Vec<u8>,
+    max_len: usize,
+) -> std::io::Result<ReadLineResult> {
+    let mut total_read = 0;
+    let mut truncated = false;
+
+    loop {
+        // Fill the internal buffer if needed
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            break; // EOF
+        }
+
+        // Process available bytes
+        for (i, &byte) in available.iter().enumerate() {
+            if !truncated && buf.len() < max_len {
+                buf.push(byte);
+                total_read += 1;
+            } else if !truncated {
+                truncated = true;
+            }
+
+            if byte == b'\n' {
+                reader.consume(i + 1);
+                return Ok(ReadLineResult {
+                    bytes_read: total_read,
+                    truncated,
+                });
+            }
+        }
+
+        let consumed = available.len();
+        reader.consume(consumed);
+    }
+
+    Ok(ReadLineResult {
+        bytes_read: total_read,
+        truncated,
+    })
+}
+
 /// Execute Codex CLI with the given options and return the result
+/// Requires timeout to be set to prevent unbounded execution
 pub async fn run(opts: Options) -> Result<CodexResult> {
+    // Ensure timeout is always set
+    let opts = if opts.timeout_secs.is_none() {
+        Options {
+            prompt: opts.prompt,
+            working_dir: opts.working_dir,
+            sandbox: opts.sandbox,
+            session_id: opts.session_id,
+            skip_git_repo_check: opts.skip_git_repo_check,
+            return_all_messages: opts.return_all_messages,
+            return_all_messages_limit: opts.return_all_messages_limit,
+            image_paths: opts.image_paths,
+            model: opts.model,
+            yolo: opts.yolo,
+            profile: opts.profile,
+            timeout_secs: Some(600), // Default 10 minutes
+        }
+    } else {
+        opts
+    };
+
     // Apply timeout if specified
     if let Some(timeout_secs) = opts.timeout_secs {
         let duration = std::time::Duration::from_secs(timeout_secs);
         match tokio::time::timeout(duration, run_internal(opts)).await {
             Ok(result) => result,
             Err(_) => {
+                // Timeout occurred - the child process will be killed automatically via kill_on_drop
                 let result = CodexResult {
                     success: false,
                     session_id: String::new(),
@@ -81,7 +173,8 @@ pub async fn run(opts: Options) -> Result<CodexResult> {
                     )),
                     warnings: None,
                 };
-                Ok(result)
+                // Skip validation since timeout error is already well-defined
+                Ok(enforce_required_fields(result, ValidationMode::Skip))
             }
         }
     } else {
@@ -132,12 +225,14 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
     }
 
     // Add the prompt at the end - Command::arg() handles proper escaping across platforms
+    // Note: When resuming, the prompt serves as a continuation message in the existing session
     cmd.args(["--", &opts.prompt]);
 
     // Configure process
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+    cmd.kill_on_drop(true); // Ensure child is killed if this future is dropped (e.g., on timeout)
 
     // Spawn the process
     let mut child = cmd.spawn().context("Failed to spawn codex command")?;
@@ -162,26 +257,53 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
     const MAX_MESSAGE_LIMIT: usize = 50000;
     const DEFAULT_MESSAGE_LIMIT: usize = 10000;
     const MAX_AGENT_MESSAGES_SIZE: usize = 10 * 1024 * 1024; // 10MB limit for agent messages
+    const MAX_ALL_MESSAGES_SIZE: usize = 50 * 1024 * 1024; // 50MB limit for all messages combined
     let message_limit = if let Some(limit) = opts.return_all_messages_limit {
         limit.min(MAX_MESSAGE_LIMIT)
     } else {
         DEFAULT_MESSAGE_LIMIT
     };
 
+    let mut all_messages_size: usize = 0;
+
     // Spawn a task to drain stderr and capture diagnostics with better error handling
+    const MAX_STDERR_SIZE: usize = 1024 * 1024; // 1MB limit for stderr
+    const MAX_LINE_LENGTH: usize = 1024 * 1024; // 1MB per line to prevent memory spikes
     let stderr_handle = tokio::spawn(async move {
         let mut stderr_output = String::new();
-        let mut stderr_reader = BufReader::new(stderr).lines();
+        let mut stderr_reader = BufReader::new(stderr);
+        let mut truncated = false;
+        let mut line_buf = Vec::new();
 
         loop {
-            match stderr_reader.next_line().await {
-                Ok(Some(line)) => {
-                    if !stderr_output.is_empty() {
-                        stderr_output.push('\n');
+            line_buf.clear();
+            match read_line_with_limit(&mut stderr_reader, &mut line_buf, MAX_LINE_LENGTH).await {
+                Ok(read_result) => {
+                    if read_result.bytes_read == 0 {
+                        break; // EOF
                     }
-                    stderr_output.push_str(&line);
+                    // Convert to string, handling invalid UTF-8
+                    let line = String::from_utf8_lossy(&line_buf);
+                    let line = line.trim_end_matches('\n').trim_end_matches('\r');
+
+                    // Check if adding this line would exceed the limit
+                    let new_size = stderr_output.len() + line.len() + 1; // +1 for newline
+                    if new_size > MAX_STDERR_SIZE {
+                        if !truncated {
+                            if !stderr_output.is_empty() {
+                                stderr_output.push('\n');
+                            }
+                            stderr_output.push_str("[... stderr truncated due to size limit ...]");
+                            truncated = true;
+                        }
+                        // Continue draining to prevent blocking the child process
+                    } else if !truncated {
+                        if !stderr_output.is_empty() {
+                            stderr_output.push('\n');
+                        }
+                        stderr_output.push_str(line.as_ref());
+                    }
                 }
-                Ok(None) => break, // EOF reached
                 Err(e) => {
                     // Log the read error but continue - this preserves diagnostic info
                     eprintln!("Warning: Failed to read from stderr: {}", e);
@@ -193,39 +315,79 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
         stderr_output
     });
 
-    // Read stdout line by line
-    let mut reader = BufReader::new(stdout).lines();
+    // Read stdout line by line with length limit
+    let mut reader = BufReader::new(stdout);
     let mut parse_error_seen = false;
-    while let Some(line) = reader.next_line().await? {
-        if line.is_empty() {
-            continue;
-        }
+    let mut line_buf = Vec::new();
 
-        // After a parse error, keep draining stdout to avoid blocking the child process
-        if parse_error_seen {
-            continue;
-        }
-
-        // Parse JSON line
-        let line_data: Value = match serde_json::from_str(&line) {
-            Ok(data) => data,
-            Err(e) => {
-                record_parse_error(&mut result, &e, &line);
-                if !parse_error_seen {
-                    parse_error_seen = true;
-                    // Stop the child so it cannot block on a full pipe, then keep draining
-                    let _ = child.start_kill();
+    loop {
+        line_buf.clear();
+        match read_line_with_limit(&mut reader, &mut line_buf, MAX_LINE_LENGTH).await {
+            Ok(read_result) => {
+                if read_result.bytes_read == 0 {
+                    break; // EOF
                 }
-                continue;
-            }
-        };
+
+                // Check for line truncation - short-circuit to error instead of attempting parse
+                if read_result.truncated {
+                    let error_msg = format!(
+                        "Output line exceeded {} byte limit and was truncated, cannot parse JSON.",
+                        MAX_LINE_LENGTH
+                    );
+                    result.success = false;
+                    result.error = Some(error_msg);
+                    if !parse_error_seen {
+                        parse_error_seen = true;
+                        // Stop the child so it cannot block on a full pipe, then keep draining
+                        let _ = child.start_kill();
+                    }
+                    continue;
+                }
+
+                // Convert to string
+                let line = String::from_utf8_lossy(&line_buf);
+                let line = line.trim_end_matches('\n').trim_end_matches('\r');
+
+                if line.is_empty() {
+                    continue;
+                }
+
+                // After a parse error, keep draining stdout to avoid blocking the child process
+                if parse_error_seen {
+                    continue;
+                }
+
+                // Parse JSON line
+                let line_data: Value = match serde_json::from_str(line.as_ref()) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        record_parse_error(&mut result, &e, line.as_ref());
+                        if !parse_error_seen {
+                            parse_error_seen = true;
+                            // Stop the child so it cannot block on a full pipe, then keep draining
+                            let _ = child.start_kill();
+                        }
+                        continue;
+                    }
+                };
 
         // Collect all messages if requested (with bounds checking)
         if opts.return_all_messages {
             if result.all_messages.len() < message_limit {
                 if let Ok(map) = serde_json::from_value::<HashMap<String, Value>>(line_data.clone())
                 {
-                    result.all_messages.push(map);
+                    // Estimate size of this message (JSON serialized size)
+                    let message_size = serde_json::to_string(&map)
+                        .map(|s| s.len())
+                        .unwrap_or(0);
+
+                    // Check if adding this message would exceed byte limit
+                    if all_messages_size + message_size <= MAX_ALL_MESSAGES_SIZE {
+                        all_messages_size += message_size;
+                        result.all_messages.push(map);
+                    } else if !result.all_messages_truncated {
+                        result.all_messages_truncated = true;
+                    }
                 }
             } else if !result.all_messages_truncated {
                 result.all_messages_truncated = true;
@@ -249,11 +411,15 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
                         if new_size > MAX_AGENT_MESSAGES_SIZE {
                             if !result.agent_messages_truncated {
                                 result.agent_messages.push_str(
-                                    "[... Agent messages truncated due to size limit ...]",
+                                    "\n[... Agent messages truncated due to size limit ...]",
                                 );
                                 result.agent_messages_truncated = true;
                             }
                         } else if !result.agent_messages_truncated {
+                            // Add a newline separator between multiple agent messages for better parsing
+                            if !result.agent_messages.is_empty() && !text.is_empty() {
+                                result.agent_messages.push('\n');
+                            }
                             result.agent_messages.push_str(text);
                         }
                     }
@@ -273,6 +439,14 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
                 } else if let Some(msg) = line_data.get("message").and_then(|v| v.as_str()) {
                     result.error = Some(format!("codex error: {}", msg));
                 }
+            }
+        }
+            }
+            Err(e) => {
+                // Create a simple IO error for the parse error
+                let io_error = std::io::Error::from(e.kind());
+                record_parse_error(&mut result, &serde_json::Error::io(io_error), "");
+                break;
             }
         }
     }
@@ -312,7 +486,7 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
         result.warnings = Some(stderr_output);
     }
 
-    Ok(enforce_required_fields(result))
+    Ok(enforce_required_fields(result, ValidationMode::Full))
 }
 
 fn record_parse_error(result: &mut CodexResult, error: &serde_json::Error, line: &str) {
@@ -337,14 +511,17 @@ fn push_warning(existing: Option<String>, warning: &str) -> Option<String> {
     }
 }
 
-fn enforce_required_fields(mut result: CodexResult) -> CodexResult {
-    if result.session_id.is_empty() {
+fn enforce_required_fields(mut result: CodexResult, mode: ValidationMode) -> CodexResult {
+    // Skip validation for cases where we already have a well-defined error (e.g., timeout, truncation)
+    if mode == ValidationMode::Skip {
+        return result;
+    }
+
+    // Skip session_id check if there's already an error (e.g., truncation, I/O error)
+    // to avoid masking the original error
+    if result.session_id.is_empty() && result.error.is_none() {
         result.success = false;
-        let prev_error = result.error.take().unwrap_or_default();
-        result.error = Some(format!(
-            "Failed to get SESSION_ID from the codex session.\n\n{}",
-            prev_error
-        ));
+        result.error = Some("Failed to get SESSION_ID from the codex session.".to_string());
     }
 
     if result.agent_messages.is_empty() {
@@ -457,7 +634,7 @@ mod tests {
             warnings: None,
         };
 
-        let updated = enforce_required_fields(result);
+        let updated = enforce_required_fields(result, ValidationMode::Full);
 
         assert!(updated.success);
         assert!(updated
@@ -480,7 +657,7 @@ mod tests {
             warnings: None,
         };
 
-        let updated = enforce_required_fields(result);
+        let updated = enforce_required_fields(result, ValidationMode::Full);
 
         assert!(!updated.success);
         assert!(updated
@@ -496,5 +673,59 @@ mod tests {
         assert!(combined.contains("first"));
         assert!(combined.contains("second"));
         assert!(combined.contains('\n'));
+    }
+
+    #[test]
+    fn test_enforce_required_fields_skips_validation_when_requested() {
+        // Simulate a timeout result with empty session_id and agent_messages
+        let result = CodexResult {
+            success: false,
+            session_id: String::new(),
+            agent_messages: String::new(),
+            agent_messages_truncated: false,
+            all_messages: Vec::new(),
+            all_messages_truncated: false,
+            error: Some("Codex execution timed out after 10 seconds".to_string()),
+            warnings: None,
+        };
+
+        let updated = enforce_required_fields(result, ValidationMode::Skip);
+
+        // When skipping validation, the original error should be preserved
+        assert!(!updated.success);
+        assert_eq!(
+            updated.error.unwrap(),
+            "Codex execution timed out after 10 seconds"
+        );
+        // Should NOT have session_id error appended
+        // Should NOT have agent_messages warning
+        assert!(updated.warnings.is_none());
+        assert!(updated.session_id.is_empty());
+    }
+
+    #[test]
+    fn test_enforce_required_fields_skips_session_id_when_error_exists() {
+        // Simulate a truncation error with empty session_id
+        let result = CodexResult {
+            success: false,
+            session_id: String::new(),
+            agent_messages: String::new(),
+            agent_messages_truncated: false,
+            all_messages: Vec::new(),
+            all_messages_truncated: false,
+            error: Some("Output line exceeded 1048576 byte limit and was truncated, cannot parse JSON.".to_string()),
+            warnings: None,
+        };
+
+        let updated = enforce_required_fields(result, ValidationMode::Full);
+
+        // When there's already an error, session_id check should be skipped
+        assert!(!updated.success);
+        let error = updated.error.unwrap();
+        assert!(error.contains("truncated"));
+        assert!(!error.contains("SESSION_ID"), "Should not add session_id error when truncation error exists");
+        // Agent_messages warning should still be added since it's a separate concern
+        assert!(updated.warnings.is_some());
+        assert!(updated.warnings.unwrap().contains("No agent_messages"));
     }
 }
