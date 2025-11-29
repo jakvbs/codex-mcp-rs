@@ -358,10 +358,10 @@ async fn run_internal(opts: Options) -> Result<CodexResult> {
                 }
 
                 // Parse JSON line
-                let line_data: Value = match serde_json::from_str(line.as_ref()) {
+                let line_data: Value = match serde_json::from_str(line) {
                     Ok(data) => data,
                     Err(e) => {
-                        record_parse_error(&mut result, &e, line.as_ref());
+                        record_parse_error(&mut result, &e, line);
                         if !parse_error_seen {
                             parse_error_seen = true;
                             // Stop the child so it cannot block on a full pipe, then keep draining

@@ -50,7 +50,7 @@ mod validation_tests {
 
         assert!(!info.server_info.name.is_empty());
         // Name is set by from_build_env() which uses package name
-        assert!(info.server_info.name.len() > 0);
+        assert!(!info.server_info.name.is_empty());
     }
 
     #[test]
