@@ -179,7 +179,7 @@ fn test_return_all_messages_flag() {
 fn test_escape_prompt_integration() {
     // Removed since escape_prompt function was removed
     // Command::arg() handles platform-specific escaping automatically
-    assert!(true); // Placeholder to maintain test count
+    // This test is now empty as the functionality was removed
 }
 
 #[test]

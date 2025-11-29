@@ -11,10 +11,10 @@ use std::path::PathBuf;
 
 mod serialize_as_os_string {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     #[allow(dead_code)]
-    pub fn serialize<S>(path: &PathBuf, serializer: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
