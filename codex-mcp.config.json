@@ -1,0 +1,4 @@
+{
+    "additional_args": ["--yolo", "--skip-git-repo-check", "--profile", "gpt-5"],
+    "timeout_secs": 3600
+}

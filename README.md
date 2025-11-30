@@ -97,23 +97,64 @@ claude mcp add codex-rs -s user --transport stdio -- $(pwd)/target/release/codex
 
 ## Tool Usage
 
-The server provides a single `codex` tool with the following parameters:
+The server provides a single `codex` tool with a deliberately small parameter
+surface. Most Codex CLI flags are configured globally in the server rather
+than exposed as MCP parameters.
 
 ### Required Parameters
 
 - `PROMPT` (string): Task instruction for Codex
-- `cd` (string): Working directory path
 
 ### Optional Parameters
 
-- `sandbox` (string): Sandbox policy - `"read-only"` (default), `"workspace-write"`, or `"danger-full-access"`
+- `cd` (string): Working directory path. If omitted or empty, the server uses
+  its current working directory.
 - `SESSION_ID` (string): Resume a previous session for multi-turn conversations
-- `skip_git_repo_check` (bool): Allow running outside git repositories (default: `false`)
-- `return_all_messages` (bool): Return full reasoning trace (default: `false`)
-- `image` (array): Paths to image files to attach
-- `model` (string): Override the Codex model
-- `yolo` (bool): Disable all prompts and sandboxing
-- `profile` (string): Load config profile from `~/.codex/config.toml`
+  (maps to Codex `thread_id`).
+- `image` (array of strings): One or more image file paths to attach to the
+  initial prompt. Paths may be absolute or relative to `cd` (or the current
+  working directory when `cd` is omitted). Each valid image is passed through
+  to Codex CLI as a separate `--image <path>` argument.
+
+## Configuration (JSON)
+
+The server can load additional Codex CLI arguments and a default timeout from
+`codex-mcp.config.json` in the current working directory, or from a path
+specified via the `CODEX_MCP_CONFIG_PATH` environment variable.
+
+Example:
+
+```json
+{
+  "additional_args": [
+    "--dangerously-bypass-approvals-and-sandbox",
+    "--profile",
+    "gpt-5"
+  ],
+  "timeout_secs": 600
+}
+```
+
+`additional_args` are appended to every Codex CLI invocation after the core
+flags (`--cd`, `--json`) and before any `resume`/`-- <prompt>` arguments.
+`timeout_secs` controls the maximum runtime for each Codex execution:
+- omitted or <= 0 → defaults to 600 seconds,
+- values above 3600 are clamped to 3600 seconds.
+
+### AGENTS.md System Prompt
+
+The server automatically looks for an `AGENTS.md` file in the working directory. If found, its contents are prepended to every prompt as a system prompt, allowing you to define project-specific instructions or context:
+
+**Example AGENTS.md:**
+```markdown
+# Project Context
+
+You are working on a Rust project using the Tokio async runtime.
+Always use proper error handling with `Result` and `?`.
+Follow the project's code style in CLAUDE.md.
+```
+
+The contents will be wrapped in `<system_prompt>` tags and prepended before the user's prompt. Changes to `AGENTS.md` take effect immediately on the next invocation.
 
 ## Testing
 
@@ -131,12 +172,13 @@ cat TESTING.md
 ```
 
 Test categories:
-- **Unit tests** (10): Core functionality (escape_prompt, Options)
-- **Integration tests** (10): End-to-end scenarios
+- **Unit tests** (22): Core functionality including AGENTS.md handling, prompt processing, Options
+- **Error flow tests** (9): Error handling and edge cases
+- **Integration tests** (13): End-to-end scenarios including AGENTS.md integration (2 are Unix-only)
 - **Server tests** (5): MCP protocol implementation
 - **CI tests**: Multi-platform validation
 
-Total: 25 tests passing ✅
+Total: 49 tests passing ✅ (47 on Windows due to platform-specific tests)
 
 Current test coverage: See [Codecov](https://codecov.io/gh/missdeer/codex-mcp-rs)
 

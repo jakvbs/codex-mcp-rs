@@ -105,18 +105,12 @@ cargo test --test server_tests
 
 ### 3. Integration Tests (tests/integration_tests.rs)
 
-End-to-end functionality tests:
+End-to-end functionality tests around the current minimal Options struct:
 
-- `test_options_validation` - Complete options validation
-- `test_sandbox_policies` - All sandbox policy types
-- `test_image_paths` - Image attachment handling
+- `test_options_validation` - Basic options validation
 - `test_session_id_format` - Session ID format validation
-- `test_model_options` - Model selection options
-- `test_return_all_messages_flag` - Message return flags
 - `test_escape_prompt_integration` - Real-world escaping scenarios
 - `test_working_directory_paths` - Path validation
-- `test_profile_configuration` - Profile handling
-- `test_yolo_mode` - YOLO mode toggling
 
 Run with:
 ```bash

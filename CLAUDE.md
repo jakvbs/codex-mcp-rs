@@ -67,8 +67,8 @@ Returns CodexResult with session_id, agent_messages, all_messages
 
 **server.rs:codex()** - MCP tool function that:
 - Validates required parameters (PROMPT, cd)
-- Validates working directory and image file paths exist
-- Sets default values (sandbox="read-only", skip_git_repo_check=false)
+- Validates working directory exists and is a directory
+- Constructs a minimal `Options` (prompt, working_dir, SESSION_ID, additional_args)
 - Calls `codex::run()` and formats response as `CodexOutput`
 
 **codex.rs:run()** - Core execution function that:
@@ -106,20 +106,41 @@ The project uses:
 
 This server wraps the `codex exec` command. Key flags used:
 - `--cd <path>` - Sets working directory
-- `--sandbox <policy>` - Security policy (read-only/workspace-write/danger-full-access)
 - `--json` - Enables JSON output streaming
-- `--skip-git-repo-check` - Allows running outside git repos
-- `--image <paths>` - Attaches images to prompt
-- `--model <name>` - Specifies model override
-- `--profile <name>` - Uses config profile from ~/.codex/config.toml
-- `--yolo` - Disables approval prompts
 - `resume <session_id>` - Continues previous session
 - `-- <prompt>` - The task prompt (must come last)
 
+Additional Codex CLI flags such as `--sandbox`, `--skip-git-repo-check`,
+`--model`, `--profile`, and `--yolo` can still be configured globally via
+`default_additional_args()` in `src/codex.rs`. Image attachments are exposed
+via the MCP `image` parameter and passed through as repeated `--image <path>`
+arguments after the core flags and any configured `additional_args`.
+
+### AGENTS.md System Prompt Support
+
+The server automatically looks for an `AGENTS.md` file in the working directory. If found and non-empty, its contents are prepended to the user prompt as a system prompt:
+
+```
+<system_prompt>
+[contents of AGENTS.md]
+</system_prompt>
+
+[user prompt]
+```
+
+This allows you to define project-specific instructions or context that will be included with every Codex invocation in that directory. The file is read on each invocation, so changes take effect immediately.
+
 ## Testing Strategy
 
-Currently no tests exist. When adding tests, consider:
-- Unit tests for prompt escaping logic (codex.rs:32)
-- Integration tests that mock the codex CLI subprocess
-- Validation tests for parameter handling (server.rs:78-99)
-- JSON parsing tests for various Codex output formats
+The project includes comprehensive tests (49 total) covering:
+- **Unit tests** (22): Core functionality including AGENTS.md reading with:
+  - File existence handling (missing, empty, whitespace-only)
+  - Size limit enforcement with UTF-8-aware truncation
+  - Permission error handling (returns warnings, not errors)
+  - Invalid UTF-8 detection and graceful degradation
+  - Multibyte character boundary handling
+  - Prompt handling, Options, sandbox policies
+- **Error flow tests** (9): Edge cases including prompt escaping, size limits, timeouts
+- **Integration tests** (13): End-to-end scenarios with codex CLI including AGENTS.md integration
+- **Server tests** (5): MCP protocol implementation and security restrictions
+- **CI tests**: Multi-platform validation (Linux, macOS, Windows)

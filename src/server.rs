@@ -1,4 +1,4 @@
-use crate::codex::{self, Options, SandboxPolicy};
+use crate::codex::{self, Options};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
@@ -69,115 +69,23 @@ pub struct CodexArgs {
     /// Instruction for task to send to codex
     #[serde(rename = "PROMPT")]
     pub prompt: String,
-    /// Set the workspace root for codex before executing the task
+    /// Optional workspace root for codex; defaults to current process directory when not provided.
     #[serde(
         serialize_with = "serialize_as_os_string::serialize",
-        deserialize_with = "serialize_as_os_string::deserialize"
+        deserialize_with = "serialize_as_os_string::deserialize",
+        default
     )]
     pub cd: PathBuf,
-    /// Sandbox policy for model-generated commands. Defaults to 'read-only'
-    #[serde(default)]
-    pub sandbox: SandboxPolicy,
+    /// Attach one or more image files to the initial prompt.
+    #[serde(
+        serialize_with = "serialize_as_os_string_vec::serialize",
+        deserialize_with = "serialize_as_os_string_vec::deserialize",
+        default
+    )]
+    pub image: Vec<PathBuf>,
     /// Resume the specified session of the codex. Defaults to None, start a new session
     #[serde(rename = "SESSION_ID", default)]
     pub session_id: Option<String>,
-    /// Allow codex running outside a Git repository (useful for one-off directories)
-    #[serde(default)]
-    pub skip_git_repo_check: bool,
-    /// Return all messages (e.g. reasoning, tool calls, etc.) from the codex session
-    #[serde(default)]
-    pub return_all_messages: bool,
-    /// Maximum number of messages to keep when return_all_messages is true (default: 10000)
-    #[serde(default)]
-    pub return_all_messages_limit: Option<usize>,
-    /// Attach one or more image files to the initial prompt
-    #[serde(
-        serialize_with = "serialize_as_os_string_vec::serialize",
-        deserialize_with = "serialize_as_os_string_vec::deserialize"
-    )]
-    pub image: Vec<PathBuf>,
-    /// The model to use for the codex session
-    #[serde(default)]
-    pub model: Option<String>,
-    /// Run every command without approvals or sandboxing
-    #[serde(default)]
-    pub yolo: bool,
-    /// Configuration profile name to load from '~/.codex/config.toml'
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Timeout in seconds for codex execution. Default: 600 (10 minutes)
-    #[serde(default = "default_timeout")]
-    pub timeout_secs: Option<u64>,
-}
-
-fn default_timeout() -> Option<u64> {
-    Some(600) // 10 minutes default
-}
-
-/// Maximum allowed timeout in seconds (1 hour)
-const MAX_TIMEOUT_SECS: u64 = 3600;
-
-/// Security configuration for server-side restrictions
-pub struct SecurityConfig {
-    /// Allow dangerous sandbox modes
-    pub allow_danger_full_access: bool,
-    /// Allow yolo mode (bypasses approvals)
-    pub allow_yolo: bool,
-    /// Allow skipping git repo checks
-    pub allow_skip_git_check: bool,
-}
-
-fn parse_env_bool(key: &str, warnings: &mut Vec<String>) -> Option<bool> {
-    std::env::var(key).ok().and_then(|v| {
-        let normalized = v.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "1" | "true" | "yes" | "y" | "on" | "t" | "enable" | "enabled" => Some(true),
-            "0" | "false" | "no" | "n" | "off" | "f" | "disable" | "disabled" => Some(false),
-            "" => None,
-            _ => {
-                warnings.push(format!(
-                    "Environment variable {} has unrecognized boolean value '{}'; defaulting to disabled.",
-                    key, v
-                ));
-                None
-            }
-        }
-    })
-}
-
-/// Get security configuration from environment variables
-fn get_security_config(warnings: &mut Vec<String>) -> SecurityConfig {
-    SecurityConfig {
-        allow_danger_full_access: parse_env_bool("CODEX_ALLOW_DANGEROUS", warnings)
-            .unwrap_or(false),
-        allow_yolo: parse_env_bool("CODEX_ALLOW_YOLO", warnings).unwrap_or(false),
-        allow_skip_git_check: parse_env_bool("CODEX_ALLOW_SKIP_GIT_CHECK", warnings)
-            .unwrap_or(false),
-    }
-}
-
-fn merge_warnings(
-    mut security_warnings: Vec<String>,
-    result_warnings: Option<String>,
-) -> Option<String> {
-    if let Some(w) = result_warnings {
-        security_warnings.push(w);
-    }
-
-    if security_warnings.is_empty() {
-        None
-    } else {
-        Some(security_warnings.join("\n"))
-    }
-}
-
-fn attach_warnings(mut error_msg: String, warnings: Option<String>) -> String {
-    if let Some(w) = warnings {
-        if !w.is_empty() {
-            error_msg = format!("{error_msg}\nWarnings: {w}");
-        }
-    }
-    error_msg
 }
 
 /// Output from the codex tool
@@ -229,39 +137,6 @@ impl Default for CodexServer {
 }
 
 impl CodexServer {
-    /// Apply server-side security restrictions based on configuration
-    /// Returns the modified args and any warning messages about security downgrades
-    pub fn apply_security_restrictions(
-        &self,
-        mut args: CodexArgs,
-        security: &SecurityConfig,
-    ) -> (CodexArgs, Vec<String>) {
-        let mut warnings = Vec::new();
-
-        // Restrict dangerous sandbox mode unless explicitly allowed
-        if !security.allow_danger_full_access && args.sandbox == SandboxPolicy::DangerFullAccess {
-            warnings.push("Security warning: danger-full-access sandbox mode was downgraded to read-only. Set CODEX_ALLOW_DANGEROUS=true to enable.".to_string());
-            args.sandbox = SandboxPolicy::ReadOnly;
-        }
-
-        // Restrict yolo mode unless explicitly allowed
-        if !security.allow_yolo && args.yolo {
-            warnings.push(
-                "Security warning: yolo mode was disabled. Set CODEX_ALLOW_YOLO=true to enable."
-                    .to_string(),
-            );
-            args.yolo = false;
-        }
-
-        // Restrict git repo skip unless explicitly allowed
-        if !security.allow_skip_git_check && args.skip_git_repo_check {
-            warnings.push("Security warning: skip_git_repo_check was disabled. Set CODEX_ALLOW_SKIP_GIT_CHECK=true to enable.".to_string());
-            args.skip_git_repo_check = false;
-        }
-
-        (args, warnings)
-    }
-
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
@@ -271,9 +146,9 @@ impl CodexServer {
 
 #[tool_router]
 impl CodexServer {
-    /// Executes a non-interactive Codex session via CLI to perform AI-assisted coding tasks in a secure workspace.
-    /// This tool wraps the 'codex exec' command, enabling model-driven code generation, debugging, or automation based on natural language prompts.
-    /// It supports resuming ongoing sessions for continuity and enforces sandbox policies to prevent unsafe operations.
+    /// Executes a non-interactive Codex session via CLI to perform AI-assisted coding tasks.
+    /// This tool wraps the `codex exec` command, enabling model-driven code generation, debugging,
+    /// or automation based on natural language prompts, and supports resuming ongoing sessions for continuity.
     #[tool(
         name = "codex",
         description = "Execute Codex CLI for AI-assisted coding tasks"
@@ -282,10 +157,6 @@ impl CodexServer {
         &self,
         Parameters(args): Parameters<CodexArgs>,
     ) -> Result<CallToolResult, McpError> {
-        // Get security configuration
-        let mut security_warnings = Vec::new();
-        let security = get_security_config(&mut security_warnings);
-
         // Validate required parameters
         if args.prompt.is_empty() {
             return Err(McpError::invalid_params(
@@ -294,44 +165,18 @@ impl CodexServer {
             ));
         }
 
-        if args.cd.as_os_str().is_empty() {
-            return Err(McpError::invalid_params(
-                "cd is required and must be a non-empty string",
-                None,
-            ));
-        }
-
-        // Apply security restrictions
-        let (mut args, restriction_warnings) = self.apply_security_restrictions(args, &security);
-        security_warnings.extend(restriction_warnings);
-
-        // Enforce timeout requirements: always set and within limits
-        match args.timeout_secs {
-            None => {
-                // Always require a timeout to prevent unbounded execution
-                args.timeout_secs = Some(600); // Use default 10 minutes
-            }
-            Some(0) => {
-                // Zero timeout is invalid, use default
-                security_warnings.push(
-                    "Timeout of 0 seconds is invalid; using default of 600 seconds".to_string(),
-                );
-                args.timeout_secs = Some(600);
-            }
-            Some(timeout) if timeout > MAX_TIMEOUT_SECS => {
-                security_warnings.push(format!(
-                    "Timeout of {} seconds exceeds maximum of {} seconds; capping to maximum",
-                    timeout, MAX_TIMEOUT_SECS
-                ));
-                args.timeout_secs = Some(MAX_TIMEOUT_SECS);
-            }
-            Some(_) => {
-                // Valid timeout within range
-            }
-        }
-
         // Validate working directory exists and is a directory
-        let working_dir = &args.cd;
+        // Prefer explicit cd; if empty, use current process directory.
+        let working_dir = if !args.cd.as_os_str().is_empty() {
+            args.cd.clone()
+        } else {
+            std::env::current_dir().map_err(|e| {
+                McpError::invalid_params(
+                    format!("failed to resolve current working directory: {}", e),
+                    None,
+                )
+            })?
+        };
         let canonical_working_dir = working_dir.canonicalize().map_err(|e| {
             McpError::invalid_params(
                 format!(
@@ -353,14 +198,13 @@ impl CodexServer {
             ));
         }
 
-        // Validate image files exist and are files
+        // Validate image files exist and are regular files
         let mut canonical_image_paths = Vec::new();
         for img_path in &args.image {
-            // Resolve image path relative to working directory first, then canonicalize
+            // Resolve image path relative to the working directory first, then canonicalize
             let resolved_path = if img_path.is_absolute() {
                 img_path.clone()
             } else {
-                // For relative paths, resolve against the working directory
                 canonical_working_dir.join(img_path)
             };
 
@@ -389,33 +233,21 @@ impl CodexServer {
         let opts = Options {
             prompt: args.prompt,
             working_dir: canonical_working_dir,
-            sandbox: args.sandbox,
             session_id: args.session_id,
-            skip_git_repo_check: args.skip_git_repo_check,
-            return_all_messages: args.return_all_messages,
-            return_all_messages_limit: args.return_all_messages_limit,
+            additional_args: codex::default_additional_args(),
             image_paths: canonical_image_paths,
-            model: args.model,
-            yolo: args.yolo,
-            profile: args.profile,
-            timeout_secs: args.timeout_secs,
+            timeout_secs: None,
         };
 
         // Execute codex
-        let result = match codex::run(opts).await {
-            Ok(r) => r,
-            Err(e) => {
-                let warning_text = merge_warnings(security_warnings.clone(), None);
-                let error_msg =
-                    attach_warnings(format!("Failed to execute codex: {}", e), warning_text);
-                return Err(McpError::internal_error(error_msg, None));
-            }
-        };
+        let result = codex::run(opts).await.map_err(|e| {
+            McpError::internal_error(format!("Failed to execute codex: {}", e), None)
+        })?;
 
-        let combined_warnings = merge_warnings(security_warnings.clone(), result.warnings.clone());
+        let combined_warnings = result.warnings.clone();
 
         // Prepare the response
-        let output = build_codex_output(&result, args.return_all_messages, combined_warnings);
+        let output = build_codex_output(&result, false, combined_warnings);
 
         let json_output = serde_json::to_string(&output).map_err(|e| {
             McpError::internal_error(format!("Failed to serialize output: {}", e), None)
@@ -443,88 +275,4 @@ impl ServerHandler for CodexServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn restore_env(key: &str, original: Option<String>) {
-        if let Some(val) = original {
-            std::env::set_var(key, val);
-        } else {
-            std::env::remove_var(key);
-        }
-    }
-
-    #[test]
-    fn parse_env_bool_accepts_numeric_and_text_values() {
-        let key = "CODEX_TEST_BOOL_ACCEPT";
-        let original = std::env::var(key).ok();
-
-        std::env::set_var(key, "1");
-        let mut warnings = Vec::new();
-        assert_eq!(parse_env_bool(key, &mut warnings), Some(true));
-        assert!(warnings.is_empty());
-
-        std::env::set_var(key, "off");
-        warnings.clear();
-        assert_eq!(parse_env_bool(key, &mut warnings), Some(false));
-        assert!(warnings.is_empty());
-
-        restore_env(key, original);
-    }
-
-    #[test]
-    fn parse_env_bool_warns_on_invalid_values() {
-        let key = "CODEX_TEST_BOOL_INVALID";
-        let original = std::env::var(key).ok();
-
-        std::env::set_var(key, "maybe");
-        let mut warnings = Vec::new();
-        assert_eq!(parse_env_bool(key, &mut warnings), None);
-        assert_eq!(warnings.len(), 1);
-
-        restore_env(key, original);
-    }
-
-    #[test]
-    fn merge_warnings_combines_security_and_result() {
-        let combined = merge_warnings(vec!["security".into()], Some("result".into())).unwrap();
-        assert!(combined.contains("security"));
-        assert!(combined.contains("result"));
-    }
-
-    #[test]
-    fn apply_security_restrictions_returns_warnings() {
-        let server = CodexServer::new();
-        let args = CodexArgs {
-            prompt: "test".to_string(),
-            cd: PathBuf::from("/tmp"),
-            sandbox: SandboxPolicy::DangerFullAccess,
-            session_id: None,
-            skip_git_repo_check: true,
-            return_all_messages: false,
-            return_all_messages_limit: None,
-            image: vec![],
-            model: None,
-            yolo: true,
-            profile: None,
-            timeout_secs: None,
-        };
-        let security = SecurityConfig {
-            allow_danger_full_access: false,
-            allow_yolo: false,
-            allow_skip_git_check: false,
-        };
-
-        let (_updated, warnings) = server.apply_security_restrictions(args, &security);
-        assert_eq!(warnings.len(), 3);
-    }
-
-    #[test]
-    fn attach_warnings_appends_to_error_message() {
-        let message = attach_warnings(
-            "failure".to_string(),
-            Some("warn-one\nwarn-two".to_string()),
-        );
-        assert!(message.contains("failure"));
-        assert!(message.contains("Warnings: warn-one"));
-        assert!(message.contains("warn-two"));
-    }
 }

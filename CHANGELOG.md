@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clippy warnings for needless borrows removed
 - Test assertions updated to match actual Implementation::from_build_env() behavior
 
+### Changed
+- **Breaking**: Simplified MCP tool surface. The `codex` tool now accepts
+  `PROMPT` (required), optional `cd`, optional `SESSION_ID`, and optional
+  `image` (array of image paths). Other former MCP parameters such as
+  `sandbox`, `skip_git_repo_check`, `return_all_messages`, `model`, `yolo`,
+  and `profile` remain removed from the tool interface and must be configured
+  via `default_additional_args()` in `src/codex.rs` if needed.
+
 ## [0.1.0] - 2025-01-28
 
 ### Added

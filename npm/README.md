@@ -38,7 +38,7 @@ Or manually add to your `~/.claude/settings.json`:
 
 - ✨ High-performance Rust implementation
 - 🚀 Low memory footprint
-- 🔒 Configurable sandbox policies
+- 🔒 Configurable Codex CLI flags (e.g. sandbox policy) via server config
 - 🔄 Session management for multi-turn conversations
 - 🖼️ Image attachment support
 - ⚡ Fast async I/O with Tokio
@@ -55,18 +55,19 @@ You must have the [Codex CLI](https://github.com/anthropics/codex) installed and
 
 ## Tool Parameters
 
-The server provides a `codex` tool with the following parameters:
+The server provides a `codex` tool with a minimal parameter surface:
 
 - **PROMPT** (required): Task instruction
-- **cd** (required): Working directory
-- **sandbox**: Security policy (read-only, workspace-write, danger-full-access)
-- **SESSION_ID**: Resume previous session
-- **skip_git_repo_check**: Allow running outside git repos
-- **return_all_messages**: Return full reasoning trace
-- **image**: Attach image files
-- **model**: Override Codex model
-- **yolo**: Disable all prompts
-- **profile**: Load config profile
+- **cd** (optional): Working directory. If omitted, the server's current
+  working directory is used.
+- **SESSION_ID** (optional): Resume previous session (Codex `thread_id`).
+- **image** (optional, array): Image file paths to attach to the prompt. Paths
+  may be absolute or relative to `cd` (or the current working directory).
+
+Other Codex CLI flags such as `--sandbox`, `--yolo`, `--model`, `--profile`,
+`--skip-git-repo-check`, and `--return-all-messages` are not MCP tool
+parameters. Configure them globally in `src/codex.rs` via `default_additional_args()`
+so they apply to every Codex invocation.
 
 ## Documentation
 

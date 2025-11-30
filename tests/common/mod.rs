@@ -11,15 +11,10 @@ pub fn get_temp_dir() -> PathBuf {
 pub fn create_test_options(prompt: &str, working_dir: &str) -> codex_mcp_rs::codex::Options {
     codex_mcp_rs::codex::Options {
         prompt: prompt.to_string(),
-        working_dir: working_dir.to_string(),
-        sandbox: "read-only".to_string(),
+        working_dir: PathBuf::from(working_dir),
         session_id: None,
-        skip_git_repo_check: true,
-        return_all_messages: false,
-        image_paths: vec![],
-        model: None,
-        yolo: false,
-        profile: None,
+        additional_args: Vec::new(),
+        timeout_secs: None,
     }
 }
 
@@ -48,8 +43,7 @@ mod tests {
     fn test_create_test_options() {
         let opts = create_test_options("test prompt", "/tmp");
         assert_eq!(opts.prompt, "test prompt");
-        assert_eq!(opts.working_dir, "/tmp");
-        assert_eq!(opts.sandbox, "read-only");
+        assert_eq!(opts.working_dir, PathBuf::from("/tmp"));
     }
 
     #[test]
