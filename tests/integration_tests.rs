@@ -313,7 +313,9 @@ async fn test_agents_md_system_prompt_integration() {
     let agents_content = "# Project Instructions\nYou are a helpful coding assistant.";
 
     // Write AGENTS.md
-    tokio::fs::write(&agents_path, agents_content).await.unwrap();
+    tokio::fs::write(&agents_path, agents_content)
+        .await
+        .unwrap();
 
     // Create a fake codex binary that echoes its arguments
     let fake_codex_script = temp_dir.path().join("fake-codex.sh");
@@ -323,7 +325,9 @@ echo '{"type":"init","thread_id":"test-session-123"}'
 echo '{"type":"agent_message_item","item":{"type":"agent_message","text":"OK"}}'
 exit 0
 "#;
-    tokio::fs::write(&fake_codex_script, script_content).await.unwrap();
+    tokio::fs::write(&fake_codex_script, script_content)
+        .await
+        .unwrap();
 
     #[cfg(unix)]
     {
@@ -381,7 +385,9 @@ async fn test_agents_md_large_file_handling() {
     // Create a reasonably-sized file (large but not breaking CLI limits)
     const TEST_CONTENT_SIZE: usize = 50_000; // 50KB
     let large_content = format!("# Large content\n{}", "x".repeat(TEST_CONTENT_SIZE));
-    tokio::fs::write(&agents_path, &large_content).await.unwrap();
+    tokio::fs::write(&agents_path, &large_content)
+        .await
+        .unwrap();
 
     // Create fake codex binary
     let fake_codex_script = temp_dir.path().join("fake-codex2.sh");
@@ -390,7 +396,9 @@ echo '{"type":"init","thread_id":"test-session-456"}'
 echo '{"type":"agent_message_item","item":{"type":"agent_message","text":"OK"}}'
 exit 0
 "#;
-    tokio::fs::write(&fake_codex_script, script_content).await.unwrap();
+    tokio::fs::write(&fake_codex_script, script_content)
+        .await
+        .unwrap();
 
     #[cfg(unix)]
     {

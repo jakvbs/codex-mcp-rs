@@ -176,7 +176,11 @@ async fn read_agents_md(working_dir: &std::path::Path) -> (Option<String>, Optio
 
     let mut content = Vec::with_capacity(bytes_to_read);
     use tokio::io::AsyncReadExt;
-    if let Err(e) = file.take(bytes_to_read as u64).read_to_end(&mut content).await {
+    if let Err(e) = file
+        .take(bytes_to_read as u64)
+        .read_to_end(&mut content)
+        .await
+    {
         let warning = format!("Failed to read AGENTS.md: {}", e);
         return (None, Some(warning));
     }
@@ -237,7 +241,10 @@ pub async fn run(opts: Options) -> Result<CodexResult> {
     // Read AGENTS.md if it exists and prepend to prompt
     let (agents_content, agents_warning) = read_agents_md(&opts.working_dir).await;
     let enhanced_prompt = if let Some(content) = agents_content {
-        format!("<system_prompt>\n{}\n</system_prompt>\n\n{}", content, opts.prompt)
+        format!(
+            "<system_prompt>\n{}\n</system_prompt>\n\n{}",
+            content, opts.prompt
+        )
     } else {
         opts.prompt.clone()
     };
@@ -909,7 +916,9 @@ mod tests {
 
         // Create a file larger than MAX_AGENTS_SIZE
         let large_content = "a".repeat(MAX_AGENTS_SIZE + 1000);
-        tokio::fs::write(&agents_path, &large_content).await.unwrap();
+        tokio::fs::write(&agents_path, &large_content)
+            .await
+            .unwrap();
 
         let (content, warning) = read_agents_md(temp_dir.path()).await;
         assert!(content.is_some());
@@ -926,7 +935,9 @@ mod tests {
         let agents_path = temp_dir.path().join("AGENTS.md");
 
         // Create a file then make it unreadable (Unix-specific)
-        tokio::fs::write(&agents_path, "test content").await.unwrap();
+        tokio::fs::write(&agents_path, "test content")
+            .await
+            .unwrap();
 
         #[cfg(unix)]
         {
@@ -980,7 +991,9 @@ mod tests {
         let mut large_content = base.repeat(MAX_AGENTS_SIZE / base.len() + 100);
         large_content.push_str("final");
 
-        tokio::fs::write(&agents_path, &large_content).await.unwrap();
+        tokio::fs::write(&agents_path, &large_content)
+            .await
+            .unwrap();
 
         let (content, warning) = read_agents_md(temp_dir.path()).await;
         assert!(content.is_some());
