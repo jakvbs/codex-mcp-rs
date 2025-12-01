@@ -107,14 +107,13 @@ than exposed as MCP parameters.
 
 ### Optional Parameters
 
-- `cd` (string): Working directory path. If omitted or empty, the server uses
-  its current working directory.
-- `SESSION_ID` (string): Resume a previous session for multi-turn conversations
-  (maps to Codex `thread_id`).
+- `SESSION_ID` (string): Resume a previously started Codex session for
+  multi-turn conversations. Use exactly the `SESSION_ID` value returned from an
+  earlier `codex` tool call (typically a UUID). If omitted, a new session is
+  created. Do not pass custom labels here.
 - `image` (array of strings): One or more image file paths to attach to the
-  initial prompt. Paths may be absolute or relative to `cd` (or the current
-  working directory when `cd` is omitted). Each valid image is passed through
-  to Codex CLI as a separate `--image <path>` argument.
+  initial prompt. Paths may be absolute or relative; each valid image is passed
+  through to Codex CLI as a separate `--image <path>` argument.
 
 ## Configuration (JSON)
 
@@ -136,7 +135,7 @@ Example:
 ```
 
 `additional_args` are appended to every Codex CLI invocation after the core
-flags (`--cd`, `--json`) and before any `resume`/`-- <prompt>` arguments.
+flags (`--json`) and before any `resume`/`-- <prompt>` arguments.
 `timeout_secs` controls the maximum runtime for each Codex execution:
 - omitted or <= 0 → defaults to 600 seconds,
 - values above 3600 are clamped to 3600 seconds.

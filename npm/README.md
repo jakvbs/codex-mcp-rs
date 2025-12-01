@@ -58,11 +58,11 @@ You must have the [Codex CLI](https://github.com/anthropics/codex) installed and
 The server provides a `codex` tool with a minimal parameter surface:
 
 - **PROMPT** (required): Task instruction
-- **cd** (optional): Working directory. If omitted, the server's current
-  working directory is used.
-- **SESSION_ID** (optional): Resume previous session (Codex `thread_id`).
+- **SESSION_ID** (optional): Resume a previously started Codex session (Codex
+  `thread_id`). Use exactly the `SESSION_ID` value returned from an earlier
+  `codex` tool call; leaving it empty starts a new session.
 - **image** (optional, array): Image file paths to attach to the prompt. Paths
-  may be absolute or relative to `cd` (or the current working directory).
+  may be absolute or relative to the current working directory.
 
 Other Codex CLI flags such as `--sandbox`, `--yolo`, `--model`, `--profile`,
 `--skip-git-repo-check`, and `--return-all-messages` are not MCP tool

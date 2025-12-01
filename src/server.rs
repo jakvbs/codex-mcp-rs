@@ -9,31 +9,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-mod serialize_as_os_string {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::path::{Path, PathBuf};
-
-    #[allow(dead_code)]
-    pub fn serialize<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Use UTF-8 string representation for cross-platform compatibility
-        match path.to_str() {
-            Some(s) => s.serialize(serializer),
-            None => Err(serde::ser::Error::custom("path contains invalid UTF-8")),
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = <String as Deserialize>::deserialize(deserializer)?;
-        Ok(PathBuf::from(s))
-    }
-}
-
 mod serialize_as_os_string_vec {
     use serde::{Deserialize, Deserializer, Serializer};
     use std::path::PathBuf;
@@ -69,21 +44,16 @@ pub struct CodexArgs {
     /// Instruction for task to send to codex
     #[serde(rename = "PROMPT")]
     pub prompt: String,
-    /// Optional workspace root for codex; defaults to current process directory when not provided.
-    #[serde(
-        serialize_with = "serialize_as_os_string::serialize",
-        deserialize_with = "serialize_as_os_string::deserialize",
-        default
-    )]
-    pub cd: PathBuf,
     /// Attach one or more image files to the initial prompt.
     #[serde(
         serialize_with = "serialize_as_os_string_vec::serialize",
         deserialize_with = "serialize_as_os_string_vec::deserialize",
         default
     )]
-    pub image: Vec<PathBuf>,
-    /// Resume the specified session of the codex. Defaults to None, start a new session
+    pub images: Vec<PathBuf>,
+    /// Resume a previously started Codex session. Must be the exact `SESSION_ID`
+    /// string returned by an earlier `codex` tool call (typically a UUID). If
+    /// omitted, a new session is created. Do not pass custom labels here.
     #[serde(rename = "SESSION_ID", default)]
     pub session_id: Option<String>,
 }
@@ -94,7 +64,7 @@ struct CodexOutput {
     success: bool,
     #[serde(rename = "SESSION_ID")]
     session_id: String,
-    agent_messages: String,
+    message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     agent_messages_truncated: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,7 +85,7 @@ fn build_codex_output(
     CodexOutput {
         success: result.success,
         session_id: result.session_id.clone(),
-        agent_messages: result.agent_messages.clone(),
+        message: result.agent_messages.clone(),
         agent_messages_truncated: result.agent_messages_truncated.then_some(true),
         all_messages: return_all_messages.then_some(result.all_messages.clone()),
         all_messages_truncated: (return_all_messages && result.all_messages_truncated)
@@ -165,18 +135,13 @@ impl CodexServer {
             ));
         }
 
-        // Validate working directory exists and is a directory
-        // Prefer explicit cd; if empty, use current process directory.
-        let working_dir = if !args.cd.as_os_str().is_empty() {
-            args.cd.clone()
-        } else {
-            std::env::current_dir().map_err(|e| {
-                McpError::invalid_params(
-                    format!("failed to resolve current working directory: {}", e),
-                    None,
-                )
-            })?
-        };
+        // Resolve and validate working directory based on the current process directory.
+        let working_dir = std::env::current_dir().map_err(|e| {
+            McpError::invalid_params(
+                format!("failed to resolve current working directory: {}", e),
+                None,
+            )
+        })?;
         let canonical_working_dir = working_dir.canonicalize().map_err(|e| {
             McpError::invalid_params(
                 format!(
@@ -200,7 +165,7 @@ impl CodexServer {
 
         // Validate image files exist and are regular files
         let mut canonical_image_paths = Vec::new();
-        for img_path in &args.image {
+        for img_path in &args.images {
             // Resolve image path relative to the working directory first, then canonicalize
             let resolved_path = if img_path.is_absolute() {
                 img_path.clone()
