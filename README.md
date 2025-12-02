@@ -108,7 +108,7 @@ The server provides a single `codex` tool with the following parameters:
 
 - `sandbox` (string): Sandbox policy - `"read-only"` (default), `"workspace-write"`, or `"danger-full-access"`
 - `SESSION_ID` (string): Resume a previous session for multi-turn conversations
-- `skip_git_repo_check` (bool): Allow running outside git repositories (default: `true`)
+- `skip_git_repo_check` (bool): Allow running outside git repositories (default: `false`)
 - `return_all_messages` (bool): Return full reasoning trace (default: `false`)
 - `image` (array): Paths to image files to attach
 - `model` (string): Override the Codex model

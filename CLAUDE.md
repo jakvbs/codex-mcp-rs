@@ -68,7 +68,7 @@ Returns CodexResult with session_id, agent_messages, all_messages
 **server.rs:codex()** - MCP tool function that:
 - Validates required parameters (PROMPT, cd)
 - Validates working directory and image file paths exist
-- Sets default values (sandbox="read-only", skip_git_repo_check=true)
+- Sets default values (sandbox="read-only", skip_git_repo_check=false)
 - Calls `codex::run()` and formats response as `CodexOutput`
 
 **codex.rs:run()** - Core execution function that:
