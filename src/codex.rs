@@ -130,129 +130,13 @@ async fn read_line_with_limit<R: AsyncBufReadExt + Unpin>(
     })
 }
 
-/// Maximum allowed size for AGENTS.md content (1MB)
-const MAX_AGENTS_SIZE: usize = 1024 * 1024;
-
-/// Read AGENTS.md from working directory if it exists
-/// Returns (content, warning) where warning is set if there are issues
-async fn read_agents_md(working_dir: &std::path::Path) -> (Option<String>, Option<String>) {
-    let agents_path = working_dir.join("AGENTS.md");
-
-    if !agents_path.exists() {
-        return (None, None);
-    }
-
-    // Check file size first to avoid allocating huge strings
-    let metadata = match tokio::fs::metadata(&agents_path).await {
-        Ok(m) => m,
-        Err(e) => {
-            let warning = format!("Failed to read AGENTS.md metadata: {}", e);
-            return (None, Some(warning));
-        }
-    };
-
-    let file_size = metadata.len(); // Keep as u64 to avoid overflow
-
-    // If file is extremely large, warn and skip to avoid OOM
-    const ABSOLUTE_MAX_SIZE: u64 = 10 * 1024 * 1024; // 10MB hard limit
-    if file_size > ABSOLUTE_MAX_SIZE {
-        let warning = format!(
-            "AGENTS.md is {} bytes, exceeding the absolute maximum of {} bytes and will be skipped.",
-            file_size,
-            ABSOLUTE_MAX_SIZE
-        );
-        return (None, Some(warning));
-    }
-
-    // Read only up to MAX_AGENTS_SIZE + a small buffer (safe to cast now since we checked against ABSOLUTE_MAX_SIZE)
-    let bytes_to_read = (file_size as usize).min(MAX_AGENTS_SIZE + 4); // +4 for potential multibyte char
-    let file = match tokio::fs::File::open(&agents_path).await {
-        Ok(f) => f,
-        Err(e) => {
-            let warning = format!("Failed to open AGENTS.md: {}", e);
-            return (None, Some(warning));
-        }
-    };
-
-    let mut content = Vec::with_capacity(bytes_to_read);
-    use tokio::io::AsyncReadExt;
-    if let Err(e) = file
-        .take(bytes_to_read as u64)
-        .read_to_end(&mut content)
-        .await
-    {
-        let warning = format!("Failed to read AGENTS.md: {}", e);
-        return (None, Some(warning));
-    }
-
-    // Check if file is empty or whitespace-only
-    if content.is_empty() {
-        return (None, None);
-    }
-
-    // Check for whitespace-only content, but only for small files
-    // For large files, we can't be sure what comes after our read window
-    if file_size <= bytes_to_read as u64 {
-        if let Ok(s) = std::str::from_utf8(&content) {
-            if s.trim().is_empty() {
-                return (None, None); // Whitespace-only
-            }
-        }
-    }
-
-    // Truncate to MAX_AGENTS_SIZE on a UTF-8 character boundary
-    let (final_content, warning) = if content.len() > MAX_AGENTS_SIZE {
-        // Use std::str::from_utf8 to find the longest valid UTF-8 prefix
-        let mut end = MAX_AGENTS_SIZE;
-
-        // Try to find the largest valid UTF-8 slice <= MAX_AGENTS_SIZE
-        while end > 0 {
-            if let Ok(valid_str) = std::str::from_utf8(&content[..end]) {
-                let warning = format!(
-                    "AGENTS.md is {} bytes, exceeding the {} byte limit and was truncated to {} bytes.",
-                    file_size,
-                    MAX_AGENTS_SIZE,
-                    end
-                );
-                return (Some(valid_str.to_string()), Some(warning));
-            }
-            end -= 1;
-        }
-
-        // If we can't find any valid UTF-8, skip the file
-        let warning = "AGENTS.md contains invalid UTF-8 and was skipped.".to_string();
-        return (None, Some(warning));
-    } else {
-        match String::from_utf8(content) {
-            Ok(s) => (s, None),
-            Err(_) => {
-                let warning = "AGENTS.md contains invalid UTF-8 and was skipped.".to_string();
-                return (None, Some(warning));
-            }
-        }
-    };
-
-    (Some(final_content), warning)
-}
-
 /// Execute Codex CLI with the given options and return the result
 /// Requires timeout to be set to prevent unbounded execution
 pub async fn run(opts: Options) -> Result<CodexResult> {
-    // Read AGENTS.md if it exists and prepend to prompt
-    let (agents_content, agents_warning) = read_agents_md(&opts.working_dir).await;
-    let enhanced_prompt = if let Some(content) = agents_content {
-        format!(
-            "<system_prompt>\n{}\n</system_prompt>\n\n{}",
-            content, opts.prompt
-        )
-    } else {
-        opts.prompt.clone()
-    };
-
     // Ensure timeout is always set
     let opts = if opts.timeout_secs.is_none() {
         Options {
-            prompt: enhanced_prompt,
+            prompt: opts.prompt,
             working_dir: opts.working_dir,
             sandbox: opts.sandbox,
             session_id: opts.session_id,
@@ -266,26 +150,13 @@ pub async fn run(opts: Options) -> Result<CodexResult> {
             timeout_secs: Some(600), // Default 10 minutes
         }
     } else {
-        Options {
-            prompt: enhanced_prompt,
-            working_dir: opts.working_dir,
-            sandbox: opts.sandbox,
-            session_id: opts.session_id,
-            skip_git_repo_check: opts.skip_git_repo_check,
-            return_all_messages: opts.return_all_messages,
-            return_all_messages_limit: opts.return_all_messages_limit,
-            image_paths: opts.image_paths,
-            model: opts.model,
-            yolo: opts.yolo,
-            profile: opts.profile,
-            timeout_secs: opts.timeout_secs,
-        }
+        opts
     };
 
     // Apply timeout if specified
     if let Some(timeout_secs) = opts.timeout_secs {
         let duration = std::time::Duration::from_secs(timeout_secs);
-        match tokio::time::timeout(duration, run_internal(opts, agents_warning.clone())).await {
+        match tokio::time::timeout(duration, run_internal(opts)).await {
             Ok(result) => result,
             Err(_) => {
                 // Timeout occurred - the child process will be killed automatically via kill_on_drop
@@ -300,19 +171,19 @@ pub async fn run(opts: Options) -> Result<CodexResult> {
                         "Codex execution timed out after {} seconds",
                         timeout_secs
                     )),
-                    warnings: agents_warning,
+                    warnings: None,
                 };
                 // Skip validation since timeout error is already well-defined
                 Ok(enforce_required_fields(result, ValidationMode::Skip))
             }
         }
     } else {
-        run_internal(opts, agents_warning).await
+        run_internal(opts).await
     }
 }
 
 /// Internal implementation of codex execution
-async fn run_internal(opts: Options, agents_warning: Option<String>) -> Result<CodexResult> {
+async fn run_internal(opts: Options) -> Result<CodexResult> {
     // Allow overriding the codex binary for tests or custom setups
     let codex_bin = std::env::var("CODEX_BIN").unwrap_or_else(|_| "codex".to_string());
 
@@ -617,14 +488,6 @@ async fn run_internal(opts: Options, agents_warning: Option<String>) -> Result<C
         result.warnings = Some(stderr_output);
     }
 
-    // Prepend AGENTS.md warning if present
-    if let Some(agents_warn) = agents_warning {
-        result.warnings = match result.warnings.take() {
-            Some(existing) => Some(format!("{}\n{}", agents_warn, existing)),
-            None => Some(agents_warn),
-        };
-    }
-
     Ok(enforce_required_fields(result, ValidationMode::Full))
 }
 
@@ -872,137 +735,5 @@ mod tests {
         // Agent_messages warning should still be added since it's a separate concern
         assert!(updated.warnings.is_some());
         assert!(updated.warnings.unwrap().contains("No agent_messages"));
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_returns_none_when_file_not_exists() {
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let (content, warning) = read_agents_md(temp_dir.path()).await;
-        assert!(content.is_none());
-        assert!(warning.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_returns_content_when_file_exists() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let agents_path = temp_dir.path().join("AGENTS.md");
-
-        let test_content = "# System Prompt\nYou are a helpful assistant.";
-        tokio::fs::write(&agents_path, test_content).await.unwrap();
-
-        let (content, warning) = read_agents_md(temp_dir.path()).await;
-        assert!(content.is_some());
-        assert_eq!(content.unwrap(), test_content);
-        assert!(warning.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_returns_none_when_file_is_empty() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let agents_path = temp_dir.path().join("AGENTS.md");
-
-        tokio::fs::write(&agents_path, "   \n\t  \n").await.unwrap();
-
-        let (content, warning) = read_agents_md(temp_dir.path()).await;
-        assert!(content.is_none());
-        assert!(warning.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_truncates_large_files() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let agents_path = temp_dir.path().join("AGENTS.md");
-
-        // Create a file larger than MAX_AGENTS_SIZE
-        let large_content = "a".repeat(MAX_AGENTS_SIZE + 1000);
-        tokio::fs::write(&agents_path, &large_content)
-            .await
-            .unwrap();
-
-        let (content, warning) = read_agents_md(temp_dir.path()).await;
-        assert!(content.is_some());
-        assert!(warning.is_some());
-
-        let content_str = content.unwrap();
-        assert!(content_str.len() <= MAX_AGENTS_SIZE);
-        assert!(warning.unwrap().contains("truncated"));
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_handles_unreadable_file() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let agents_path = temp_dir.path().join("AGENTS.md");
-
-        // Create a file then make it unreadable (Unix-specific)
-        tokio::fs::write(&agents_path, "test content")
-            .await
-            .unwrap();
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&agents_path).unwrap().permissions();
-            perms.set_mode(0o000); // No permissions
-            std::fs::set_permissions(&agents_path, perms).unwrap();
-
-            let (content, warning) = read_agents_md(temp_dir.path()).await;
-            assert!(content.is_none());
-            assert!(warning.is_some());
-            let warn_msg = warning.unwrap();
-            assert!(warn_msg.contains("Failed to open") || warn_msg.contains("Failed to read"));
-
-            // Restore permissions for cleanup
-            let mut perms = std::fs::metadata(&agents_path).unwrap().permissions();
-            perms.set_mode(0o644);
-            std::fs::set_permissions(&agents_path, perms).unwrap();
-        }
-
-        #[cfg(not(unix))]
-        {
-            // On Windows, just verify the function doesn't panic
-            let (content, _warning) = read_agents_md(temp_dir.path()).await;
-            assert!(content.is_some());
-        }
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_handles_invalid_utf8() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let agents_path = temp_dir.path().join("AGENTS.md");
-
-        // Write invalid UTF-8 bytes
-        let invalid_utf8 = vec![0xFF, 0xFE, 0xFD];
-        tokio::fs::write(&agents_path, &invalid_utf8).await.unwrap();
-
-        let (content, warning) = read_agents_md(temp_dir.path()).await;
-        assert!(content.is_none());
-        assert!(warning.is_some());
-        assert!(warning.unwrap().contains("invalid UTF-8"));
-    }
-
-    #[tokio::test]
-    async fn test_read_agents_md_truncates_multibyte_chars_correctly() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let agents_path = temp_dir.path().join("AGENTS.md");
-
-        // Create content with multibyte UTF-8 characters that would be cut mid-character
-        let base = "你好世界"; // Chinese characters (3 bytes each in UTF-8)
-        let mut large_content = base.repeat(MAX_AGENTS_SIZE / base.len() + 100);
-        large_content.push_str("final");
-
-        tokio::fs::write(&agents_path, &large_content)
-            .await
-            .unwrap();
-
-        let (content, warning) = read_agents_md(temp_dir.path()).await;
-        assert!(content.is_some());
-        assert!(warning.is_some());
-
-        let content_str = content.unwrap();
-        // Verify it's valid UTF-8 (no panic)
-        assert!(content_str.len() <= MAX_AGENTS_SIZE);
-        // Verify it's actually valid UTF-8 by checking we can iterate chars
-        assert!(content_str.chars().count() > 0);
     }
 }

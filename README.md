@@ -115,21 +115,6 @@ The server provides a single `codex` tool with the following parameters:
 - `yolo` (bool): Disable all prompts and sandboxing
 - `profile` (string): Load config profile from `~/.codex/config.toml`
 
-### AGENTS.md System Prompt
-
-The server automatically looks for an `AGENTS.md` file in the working directory. If found, its contents are prepended to every prompt as a system prompt, allowing you to define project-specific instructions or context:
-
-**Example AGENTS.md:**
-```markdown
-# Project Context
-
-You are working on a Rust project using the Tokio async runtime.
-Always use proper error handling with `Result` and `?`.
-Follow the project's code style in CLAUDE.md.
-```
-
-The contents will be wrapped in `<system_prompt>` tags and prepended before the user's prompt. Changes to `AGENTS.md` take effect immediately on the next invocation.
-
 ## Testing
 
 The project has comprehensive test coverage:
@@ -146,13 +131,12 @@ cat TESTING.md
 ```
 
 Test categories:
-- **Unit tests** (22): Core functionality including AGENTS.md handling, prompt processing, Options
-- **Error flow tests** (9): Error handling and edge cases
-- **Integration tests** (13): End-to-end scenarios including AGENTS.md integration (2 are Unix-only)
+- **Unit tests** (10): Core functionality (escape_prompt, Options)
+- **Integration tests** (10): End-to-end scenarios
 - **Server tests** (5): MCP protocol implementation
 - **CI tests**: Multi-platform validation
 
-Total: 49 tests passing ✅ (47 on Windows due to platform-specific tests)
+Total: 25 tests passing ✅
 
 Current test coverage: See [Codecov](https://codecov.io/gh/missdeer/codex-mcp-rs)
 
