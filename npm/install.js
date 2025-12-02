@@ -6,7 +6,7 @@ const unzipper = require('unzipper');
 
 const packageJson = require('./package.json');
 const version = packageJson.version;
-const REPO = 'missdeer/codex-mcp-rs';
+const REPO = 'jakvbs/codex-mcp-rs';
 
 const platformMap = {
   'darwin': 'Darwin',

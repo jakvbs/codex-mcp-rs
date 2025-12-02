@@ -168,7 +168,7 @@ Our CI pipeline runs tests on every push and pull request:
 5. **Benchmarks** - Performance benchmarks (main branch only)
 6. **Minimum Rust Version** - Test with Rust 1.70
 
-View CI results: [GitHub Actions](https://github.com/missdeer/codex-mcp-rs/actions)
+View CI results: [GitHub Actions](https://github.com/jakvbs/codex-mcp-rs/actions)
 
 ## Writing New Tests
 
@@ -282,7 +282,7 @@ rust-gdb --args target/debug/deps/codex_mcp_rs-<hash> test_name
 - **Critical Paths**: > 95%
 - **Error Handling**: > 90%
 
-Current coverage: See [Codecov](https://codecov.io/gh/missdeer/codex-mcp-rs)
+Current coverage: See [Codecov](https://codecov.io/gh/jakvbs/codex-mcp-rs)
 
 ## Troubleshooting
 

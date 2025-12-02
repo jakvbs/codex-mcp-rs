@@ -2,10 +2,10 @@
 name = "codex-mcp-rs"
 version = "0.1.2"
 edition = "2021"
-authors = ["missdeer"]
+authors = ["jakvbs"]
 description = "MCP server wrapping the Codex CLI in Rust"
 license = "MIT"
-repository = "https://github.com/missdeer/codex-mcp-rs"
+repository = "https://github.com/jakvbs/codex-mcp-rs"
 
 [dependencies]
 rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "main", features = ["server", "transport-io"] }

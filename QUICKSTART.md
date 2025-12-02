@@ -22,7 +22,7 @@ Get started with codex-mcp-rs in 5 minutes!
 
 ```bash
 # Install globally
-npm install -g @missdeer/codex-mcp-rs
+npm install -g @jakvbs/codex-mcp-rs
 
 # Add to Claude Code
 claude mcp add codex-rs -s user --transport stdio -- codex-mcp-rs
@@ -30,7 +30,7 @@ claude mcp add codex-rs -s user --transport stdio -- codex-mcp-rs
 
 ### Using Pre-built Binary
 
-1. Download from [releases](https://github.com/missdeer/codex-mcp-rs/releases)
+1. Download from [releases](https://github.com/jakvbs/codex-mcp-rs/releases)
 2. Extract the archive
 3. Add to Claude Code:
    ```bash
@@ -41,7 +41,7 @@ claude mcp add codex-rs -s user --transport stdio -- codex-mcp-rs
 
 ```bash
 # Clone repository
-git clone https://github.com/missdeer/codex-mcp-rs.git
+git clone https://github.com/jakvbs/codex-mcp-rs.git
 cd codex-mcp-rs
 
 # Build release binary
@@ -146,7 +146,7 @@ Not relative paths:
 
 NPM binary not in PATH. Try:
 ```bash
-npm list -g @missdeer/codex-mcp-rs
+npm list -g @jakvbs/codex-mcp-rs
 which codex-mcp-rs
 ```
 
@@ -185,5 +185,5 @@ claude mcp logs codex-rs
 
 ## Getting Help
 
-- 🐛 [Report bugs](https://github.com/missdeer/codex-mcp-rs/issues)
-- 💬 [Discussions](https://github.com/missdeer/codex-mcp-rs/discussions)
+- 🐛 [Report bugs](https://github.com/jakvbs/codex-mcp-rs/issues)
+- 💬 [Discussions](https://github.com/jakvbs/codex-mcp-rs/discussions)

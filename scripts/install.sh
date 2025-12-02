@@ -2,7 +2,7 @@
 
 set -e
 
-REPO="missdeer/codex-mcp-rs"
+REPO="jakvbs/codex-mcp-rs"
 INSTALL_DIR="/opt/codex-mcp-rs"
 BINARY_NAME="codex-mcp-rs"
 

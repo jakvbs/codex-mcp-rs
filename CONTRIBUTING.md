@@ -11,7 +11,7 @@ Thank you for your interest in contributing to codex-mcp-rs!
 
 2. Clone the repository:
    ```bash
-   git clone https://github.com/missdeer/codex-mcp-rs.git
+   git clone https://github.com/jakvbs/codex-mcp-rs.git
    cd codex-mcp-rs
    ```
 
@@ -73,4 +73,4 @@ See [CLAUDE.md](./CLAUDE.md) for detailed architecture documentation.
 
 ## Questions?
 
-Open an issue on GitHub or contact missdeer
+Open an issue on GitHub or contact jakvbs

@@ -1,11 +1,11 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
-  "name": "io.github.missdeer/codex-mcp-rs",
+  "name": "io.github.jakvbs/codex-mcp-rs",
   "version": "0.1.2",
   "description": "Rust MCP server wrapping Codex CLI for stdio-based tool calls. High-performance implementation with async I/O.",
   "packages": [
     {
-      "identifier": "@missdeer/codex-mcp-rs",
+      "identifier": "@jakvbs/codex-mcp-rs",
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "transport": {
@@ -16,6 +16,6 @@
   ],
   "repository": {
     "source": "github",
-    "url": "https://github.com/missdeer/codex-mcp-rs"
+    "url": "https://github.com/jakvbs/codex-mcp-rs"
   }
 }

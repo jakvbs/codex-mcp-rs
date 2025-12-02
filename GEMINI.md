@@ -57,7 +57,7 @@ The server communicates over `stdio`.
 The recommended way to install `codex-mcp-rs` is via `npm`, which handles downloading the correct binary for the user's platform.
 
 ```bash
-npm install -g @missdeer/codex-mcp-rs
+npm install -g @jakvbs/codex-mcp-rs
 ```
 
 ## Development Conventions

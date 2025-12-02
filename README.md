@@ -1,6 +1,6 @@
 # codex-mcp-rs
 
-[![CI](https://github.com/missdeer/codex-mcp-rs/workflows/CI/badge.svg)](https://github.com/missdeer/codex-mcp-rs/actions)
+[![CI](https://github.com/jakvbs/codex-mcp-rs/workflows/CI/badge.svg)](https://github.com/jakvbs/codex-mcp-rs/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Rust Version](https://img.shields.io/badge/rust-1.70%2B-blue.svg)](https://www.rust-lang.org)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
@@ -55,7 +55,7 @@ Or after building:
 The easiest way to install is via npm, which will automatically download the correct binary for your platform:
 
 ```bash
-npm install -g @missdeer/codex-mcp-rs
+npm install -g @jakvbs/codex-mcp-rs
 ```
 
 Then add to your Claude Code MCP configuration:
@@ -69,7 +69,7 @@ claude mcp add codex-rs -s user --transport stdio -- codex-mcp-rs
 Automatically download and install the latest release binary to `/opt/codex-mcp-rs/`:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/missdeer/codex-mcp-rs/master/scripts/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/jakvbs/codex-mcp-rs/master/scripts/install.sh | bash
 ```
 
 This script will:
@@ -80,7 +80,7 @@ This script will:
 
 ### Option 3: Install from Release
 
-Download the appropriate binary for your platform from the [releases page](https://github.com/missdeer/codex-mcp-rs/releases), extract it, and add to your MCP configuration:
+Download the appropriate binary for your platform from the [releases page](https://github.com/jakvbs/codex-mcp-rs/releases), extract it, and add to your MCP configuration:
 
 ```bash
 claude mcp add codex-rs -s user --transport stdio -- /path/to/codex-mcp-rs
@@ -89,7 +89,7 @@ claude mcp add codex-rs -s user --transport stdio -- /path/to/codex-mcp-rs
 ### Option 4: Build from Source
 
 ```bash
-git clone https://github.com/missdeer/codex-mcp-rs.git
+git clone https://github.com/jakvbs/codex-mcp-rs.git
 cd codex-mcp-rs
 cargo build --release
 claude mcp add codex-rs -s user --transport stdio -- $(pwd)/target/release/codex-mcp-rs
@@ -179,7 +179,7 @@ Test categories:
 
 Total: 49 tests passing ✅ (47 on Windows due to platform-specific tests)
 
-Current test coverage: See [Codecov](https://codecov.io/gh/missdeer/codex-mcp-rs)
+Current test coverage: See [Codecov](https://codecov.io/gh/jakvbs/codex-mcp-rs)
 
 ## Architecture
 
@@ -210,6 +210,6 @@ Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelin
 
 ## License
 
-MIT License - Copyright (c) 2025 missdeer
+MIT License - Copyright (c) 2025 jakvbs
 
 See [LICENSE](./LICENSE) for details.

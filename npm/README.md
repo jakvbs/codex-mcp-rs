@@ -1,4 +1,4 @@
-# @missdeer/codex-mcp-rs
+# @jakvbs/codex-mcp-rs
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
@@ -8,7 +8,7 @@ NPM package for **codex-mcp-rs** - A high-performance Rust implementation of MCP
 ## Installation
 
 ```bash
-npm install -g @missdeer/codex-mcp-rs
+npm install -g @jakvbs/codex-mcp-rs
 ```
 
 This will automatically download and install the appropriate binary for your platform (Linux, macOS, or Windows).
@@ -71,11 +71,11 @@ so they apply to every Codex invocation.
 
 ## Documentation
 
-For detailed documentation, see the [GitHub repository](https://github.com/missdeer/codex-mcp-rs).
+For detailed documentation, see the [GitHub repository](https://github.com/jakvbs/codex-mcp-rs).
 
 ## License
 
-MIT License - Copyright (c) 2025 missdeer
+MIT License - Copyright (c) 2025 jakvbs
 
 ## Related Projects
 

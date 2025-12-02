@@ -1,7 +1,7 @@
 {
-  "name": "@missdeer/codex-mcp-rs",
+  "name": "@jakvbs/codex-mcp-rs",
   "version": "0.1.2",
-  "mcpName": "io.github.missdeer/codex-mcp-rs",
+  "mcpName": "io.github.jakvbs/codex-mcp-rs",
   "description": "NPM wrapper for codex-mcp-rs - Rust implementation of Codex MCP server",
   "bin": {
     "codex-mcp-rs": "bin.js"
@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/missdeer/codex-mcp-rs.git"
+    "url": "git+https://github.com/jakvbs/codex-mcp-rs.git"
   },
-  "author": "missdeer",
+  "author": "jakvbs",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/missdeer/codex-mcp-rs/issues"
+    "url": "https://github.com/jakvbs/codex-mcp-rs/issues"
   },
-  "homepage": "https://github.com/missdeer/codex-mcp-rs#readme",
+  "homepage": "https://github.com/jakvbs/codex-mcp-rs#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"

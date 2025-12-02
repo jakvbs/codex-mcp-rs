@@ -57,4 +57,4 @@ npm-pack: build-release ## Pack npm package for testing
 	cd npm && npm pack
 
 npm-install: npm-pack ## Install npm package locally for testing
-	npm install -g npm/missdeer-codex-mcp-rs-*.tgz
+	npm install -g npm/jakvbs-codex-mcp-rs-*.tgz
