@@ -97,4 +97,3 @@ echo {"thread_id":"test-session","item":{"type":"agent_message","text":"ok"}}
     env::remove_var("CODEX_BIN");
     env::remove_var("CODEX_IMAGE_ARGS_LOG");
 }
-

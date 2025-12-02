@@ -239,5 +239,6 @@ impl ServerHandler for CodexServer {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::*;
 }
