@@ -60,7 +60,8 @@ The server provides a `codex` tool with a minimal parameter surface:
 - **PROMPT** (required): Task instruction
 - **SESSION_ID** (optional): Resume a previously started Codex session (Codex
   `thread_id`). Use exactly the `SESSION_ID` value returned from an earlier
-  `codex` tool call; leaving it empty starts a new session.
+  `codex` tool call. When starting a new session, omit this field entirely
+  instead of passing an empty string.
 - **image** (optional, array): Image file paths to attach to the prompt. Paths
   may be absolute or relative to the current working directory.
 

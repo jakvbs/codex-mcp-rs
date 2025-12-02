@@ -110,7 +110,9 @@ than exposed as MCP parameters.
 - `SESSION_ID` (string): Resume a previously started Codex session for
   multi-turn conversations. Use exactly the `SESSION_ID` value returned from an
   earlier `codex` tool call (typically a UUID). If omitted, a new session is
-  created. Do not pass custom labels here.
+  created. Do not pass custom labels here, and never send an empty string value:
+  when starting a new session, omit the `SESSION_ID` field entirely instead of
+  passing `""`.
 - `image` (array of strings): One or more image file paths to attach to the
   initial prompt. Paths may be absolute or relative; each valid image is passed
   through to Codex CLI as a separate `--image <path>` argument.
