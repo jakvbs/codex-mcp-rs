@@ -217,15 +217,15 @@ impl CodexServer {
 
         let combined_warnings = result.warnings.clone();
 
-        // Prepare the response
+        // Prepare the response using TOON format for token efficiency
         let output = build_codex_output(&result, false, combined_warnings);
 
-        let json_output = serde_json::to_string(&output).map_err(|e| {
+        let toon_output = toon_format::encode_default(&output).map_err(|e| {
             McpError::internal_error(format!("Failed to serialize output: {}", e), None)
         })?;
 
-        // Always return structured content so callers can inspect success, error, and warning fields.
-        Ok(CallToolResult::success(vec![Content::text(json_output)]))
+        // Return structured content so callers can inspect success, error, and warning fields
+        Ok(CallToolResult::success(vec![Content::text(toon_output)]))
     }
 }
 
