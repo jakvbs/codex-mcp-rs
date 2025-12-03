@@ -70,16 +70,8 @@ cargo test --release
 
 ### 1. Unit Tests (src/codex.rs)
 
-Tests for the `escape_prompt` function that handles Windows shell escaping:
+Tests for Options validation and result processing:
 
-- `test_escape_prompt_backslash` - Backslash escaping
-- `test_escape_prompt_quotes` - Double quote escaping
-- `test_escape_prompt_newline` - Newline escaping
-- `test_escape_prompt_tab` - Tab character escaping
-- `test_escape_prompt_single_quote` - Single quote escaping
-- `test_escape_prompt_complex` - Complex multi-line strings
-- `test_escape_prompt_empty` - Empty string handling
-- `test_escape_prompt_special_chars` - Special control characters
 - `test_options_creation` - Options struct validation
 - `test_options_with_session` - Options with session ID
 
@@ -156,7 +148,7 @@ Our CI pipeline runs tests on every push and pull request:
 
 ### Test Matrix
 
-- **Platforms**: Ubuntu, macOS, Windows
+- **Platforms**: Ubuntu, macOS
 - **Rust versions**: stable, beta, nightly (Ubuntu only)
 
 ### CI Jobs
@@ -292,18 +284,6 @@ If tests hang, they may be waiting for I/O. Run with timeout:
 
 ```bash
 cargo test --timeout 30
-```
-
-### Tests Fail on Windows
-
-Windows path and escaping issues are common. Use `cfg!(windows)` guards:
-
-```rust
-#[cfg(windows)]
-#[test]
-fn windows_specific_test() {
-    // ...
-}
 ```
 
 ### Flaky Tests

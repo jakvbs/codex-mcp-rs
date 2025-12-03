@@ -3,9 +3,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const platform = process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'Darwin' : 'Linux';
-const binaryName = platform === 'Windows' ? 'codex-mcp-rs.exe' : 'codex-mcp-rs';
-const binaryPath = path.join(__dirname, binaryName);
+const binaryPath = path.join(__dirname, 'codex-mcp-rs');
 
 const child = spawn(binaryPath, process.argv.slice(2), {
   stdio: 'inherit'

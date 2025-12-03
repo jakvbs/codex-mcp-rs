@@ -1,8 +1,6 @@
 const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
 const tar = require('tar');
-const unzipper = require('unzipper');
 
 const packageJson = require('./package.json');
 const version = packageJson.version;
@@ -10,8 +8,7 @@ const REPO = 'jakvbs/codex-mcp-rs';
 
 const platformMap = {
   'darwin': 'Darwin',
-  'linux': 'Linux',
-  'win32': 'Windows'
+  'linux': 'Linux'
 };
 
 const archMap = {
@@ -27,9 +24,8 @@ if (!platform || !arch) {
   process.exit(1);
 }
 
-const extension = platform === 'Windows' ? 'zip' : 'tar.gz';
-const binaryName = platform === 'Windows' ? 'codex-mcp-rs.exe' : 'codex-mcp-rs';
-const fileName = `codex-mcp-rs_${platform}_${arch}.${extension}`;
+const binaryName = 'codex-mcp-rs';
+const fileName = `codex-mcp-rs_${platform}_${arch}.tar.gz`;
 const downloadUrl = `https://github.com/${REPO}/releases/download/v${version}/${fileName}`;
 
 console.log(`Downloading ${downloadUrl}...`);
@@ -59,26 +55,16 @@ async function download() {
 async function extract() {
   console.log(`Extracting ${fileName}...`);
 
-  if (extension === 'zip') {
-    fs.createReadStream(fileName)
-      .pipe(unzipper.Extract({ path: '.' }))
-      .on('close', () => {
-        cleanup();
-      });
-  } else {
-    await tar.x({
-      file: fileName,
-      cwd: '.'
-    });
-    cleanup();
-  }
+  await tar.x({
+    file: fileName,
+    cwd: '.'
+  });
+  cleanup();
 }
 
 function cleanup() {
   fs.unlinkSync(fileName);
-  if (platform !== 'Windows') {
-    fs.chmodSync(binaryName, 0o755);
-  }
+  fs.chmodSync(binaryName, 0o755);
   console.log('Installation complete!');
 }
 

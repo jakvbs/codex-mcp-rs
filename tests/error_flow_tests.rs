@@ -142,30 +142,18 @@ async fn test_timeout_error_shape() {
     let temp_path = temp_dir.path().to_path_buf();
 
     // Create a simple shell script that sleeps
-    #[cfg(not(target_os = "windows"))]
-    {
-        use std::fs;
-        use std::os::unix::fs::PermissionsExt;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
 
-        let script_path = temp_path.join("sleep_script.sh");
-        fs::write(&script_path, "#!/bin/sh\nsleep 10\n").expect("Failed to write script");
-        let mut perms = fs::metadata(&script_path)
-            .expect("Failed to get metadata")
-            .permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script_path, perms).expect("Failed to set permissions");
+    let script_path = temp_path.join("sleep_script.sh");
+    fs::write(&script_path, "#!/bin/sh\nsleep 10\n").expect("Failed to write script");
+    let mut perms = fs::metadata(&script_path)
+        .expect("Failed to get metadata")
+        .permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&script_path, perms).expect("Failed to set permissions");
 
-        env::set_var("CODEX_BIN", script_path.to_str().unwrap());
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::fs;
-        let script_path = temp_path.join("sleep_script.bat");
-        fs::write(&script_path, "@echo off\ntimeout /t 10 /nobreak\n")
-            .expect("Failed to write script");
-        env::set_var("CODEX_BIN", script_path.to_str().unwrap());
-    }
+    env::set_var("CODEX_BIN", script_path.to_str().unwrap());
 
     let opts = Options {
         prompt: "test".to_string(),
@@ -221,14 +209,12 @@ async fn test_additional_args_are_passed_to_codex_cli() {
     // Path where the helper script will log its argv
     let log_path = temp_path.join("codex_args.log");
 
-    // Create a helper script/batch that logs argv and emits a minimal JSON event
-    #[cfg(not(target_os = "windows"))]
-    {
-        use std::fs;
-        use std::os::unix::fs::PermissionsExt;
+    // Create a helper script that logs argv and emits a minimal JSON event
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
 
-        let script_path = temp_path.join("echo_args.sh");
-        let script_contents = r#"#!/bin/sh
+    let script_path = temp_path.join("echo_args.sh");
+    let script_contents = r#"#!/bin/sh
 LOG_FILE="${CODEX_ARGS_LOG}"
 : > "$LOG_FILE"
 printf "%s" "$0" > "$LOG_FILE"
@@ -238,29 +224,14 @@ done
 echo '{"thread_id":"test-session","item":{"type":"agent_message","text":"ok"}}'
 "#;
 
-        fs::write(&script_path, script_contents).expect("Failed to write script");
-        let mut perms = fs::metadata(&script_path)
-            .expect("Failed to get metadata")
-            .permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script_path, perms).expect("Failed to set permissions");
+    fs::write(&script_path, script_contents).expect("Failed to write script");
+    let mut perms = fs::metadata(&script_path)
+        .expect("Failed to get metadata")
+        .permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&script_path, perms).expect("Failed to set permissions");
 
-        env::set_var("CODEX_BIN", script_path.to_str().unwrap());
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::fs;
-
-        let script_path = temp_path.join("echo_args.bat");
-        let script_contents = r#"@echo off
-set LOG_FILE=%CODEX_ARGS_LOG%
-echo %0 %* > "%LOG_FILE%"
-echo {"thread_id":"test-session","item":{"type":"agent_message","text":"ok"}}
-"#;
-        fs::write(&script_path, script_contents).expect("Failed to write script");
-        env::set_var("CODEX_BIN", script_path.to_str().unwrap());
-    }
+    env::set_var("CODEX_BIN", script_path.to_str().unwrap());
 
     // Make log path available to the helper script
     env::set_var("CODEX_ARGS_LOG", log_path.to_str().unwrap());

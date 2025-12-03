@@ -73,7 +73,6 @@ Returns CodexResult with session_id, agent_messages, all_messages
 
 **codex.rs:run()** - Core execution function that:
 - Builds the `codex exec` command with proper arguments
-- Uses Windows-specific prompt escaping when needed
 - Spawns subprocess with stdin=null, stdout/stderr=piped
 - Streams stdout line-by-line, parsing JSON events
 - Extracts `thread_id` (returned as SESSION_ID), `agent_message` items, and error types
@@ -88,8 +87,6 @@ Returns CodexResult with session_id, agent_messages, all_messages
 - Empty agent_messages (indicates no response from Codex)
 - Non-zero exit codes from the Codex subprocess
 - JSON parse errors in streamed output
-
-**Platform Differences**: Windows requires special prompt escaping (backslashes, quotes, newlines) to prevent shell interpretation issues.
 
 **Streaming Output**: The Codex CLI outputs JSONL (JSON Lines). The server reads line-by-line to handle potentially long-running operations and collect all agent messages incrementally.
 
@@ -143,4 +140,4 @@ The project includes comprehensive tests (49 total) covering:
 - **Error flow tests** (9): Edge cases including prompt escaping, size limits, timeouts
 - **Integration tests** (13): End-to-end scenarios with codex CLI including AGENTS.md integration
 - **Server tests** (5): MCP protocol implementation and security restrictions
-- **CI tests**: Multi-platform validation (Linux, macOS, Windows)
+- **CI tests**: Multi-platform validation (Linux, macOS)
