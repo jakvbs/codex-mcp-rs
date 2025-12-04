@@ -126,30 +126,30 @@ impl CodexServer {
         name = "codex",
         description = "Execute Codex CLI for AI-assisted coding tasks"
     )]
-	    async fn codex(
-	        &self,
-	        Parameters(args): Parameters<CodexArgs>,
-	    ) -> Result<CallToolResult, McpError> {
+    async fn codex(
+        &self,
+        Parameters(args): Parameters<CodexArgs>,
+    ) -> Result<CallToolResult, McpError> {
         // Validate required parameters
-	        if args.prompt.is_empty() {
-	            return Err(McpError::invalid_params(
-	                "PROMPT is required and must be a non-empty string",
-	                None,
-	            ));
-	        }
+        if args.prompt.is_empty() {
+            return Err(McpError::invalid_params(
+                "PROMPT is required and must be a non-empty string",
+                None,
+            ));
+        }
 
-	        // Normalize empty string session_id to None so that clients should
-	        // either omit the field or provide a real session id.
-	        let session_id = args.session_id.filter(|s| !s.is_empty());
+        // Normalize empty string session_id to None so that clients should
+        // either omit the field or provide a real session id.
+        let session_id = args.session_id.filter(|s| !s.is_empty());
 
-	        if let Some(ref id) = session_id {
-	            if Uuid::parse_str(id).is_err() {
-	                return Err(McpError::invalid_params(
-	                    "SESSION_ID must be a valid UUID string",
-	                    None,
-	                ));
-	            }
-	        }
+        if let Some(ref id) = session_id {
+            if Uuid::parse_str(id).is_err() {
+                return Err(McpError::invalid_params(
+                    "SESSION_ID must be a valid UUID string",
+                    None,
+                ));
+            }
+        }
 
         // Resolve and validate working directory based on the current process directory.
         let working_dir = std::env::current_dir().map_err(|e| {
@@ -169,15 +169,15 @@ impl CodexServer {
             )
         })?;
 
-	        if !canonical_working_dir.is_dir() {
+        if !canonical_working_dir.is_dir() {
             return Err(McpError::invalid_params(
                 format!(
                     "working directory is not a directory: {}",
                     working_dir.display()
-	                ),
-	                None,
-	            ));
-	        }
+                ),
+                None,
+            ));
+        }
 
         // Validate image files exist and are regular files
         let mut canonical_image_paths = Vec::new();
@@ -210,8 +210,8 @@ impl CodexServer {
             canonical_image_paths.push(canonical);
         }
 
-	        // Create options for codex client
-	        let opts = Options {
+        // Create options for codex client
+        let opts = Options {
             prompt: args.prompt,
             working_dir: canonical_working_dir,
             session_id,
